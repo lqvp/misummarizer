@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiAuth Callback | Misskey プロフィール要約ジェネレーター</title>
+  <style>
+    :root {
+      --bg: #f9e1ec;
+      --bg-alt: #ffffff;
+      --accent: #f2b6cd;
+      --accent-strong: #e38daa;
+      --border: #e9c9d6;
+      --text: #3a2f33;
+      --muted: #6b5f64;
+      --shadow: rgba(226, 170, 195, 0.35);
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans JP", "Noto Sans JP", system-ui, sans-serif;
+      background: linear-gradient(180deg, var(--bg) 0%, #fef4f8 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    main {
+      max-width: 680px;
+      width: 100%;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 12px 30px var(--shadow);
+      padding: 2rem;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.6rem;
+    }
+
+    section {
+      margin-top: 1.5rem;
+    }
+
+    .status-card {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      background: rgba(255, 255, 255, 0.75);
+    }
+
+    .status-card[data-level="error"] {
+      border-color: rgba(196, 77, 111, 0.4);
+      background: rgba(196, 77, 111, 0.12);
+    }
+
+    .status-card[data-level="success"] {
+      border-color: rgba(58, 149, 102, 0.35);
+      background: rgba(58, 149, 102, 0.12);
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    textarea {
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.8rem;
+      font-size: 1rem;
+      background: rgba(255, 255, 255, 0.9);
+      color: inherit;
+    }
+
+    input[readonly] {
+      background: rgba(255, 255, 255, 0.65);
+      cursor: text;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.65rem 1.4rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent-strong);
+      color: #fff4f9;
+      box-shadow: 0 6px 18px rgba(251, 194, 214, 0.35);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 26px rgba(242, 182, 205, 0.4);
+    }
+
+    .token-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
+    .meta-info {
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .notice {
+      border-radius: 12px;
+      border: 1px dashed var(--accent);
+      background: rgba(242, 182, 205, 0.25);
+      padding: 1rem 1.25rem;
+      margin-top: 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    a.button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      text-decoration: none;
+      background: rgba(242, 182, 205, 0.35);
+      color: var(--text);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 0.55rem 1.2rem;
+      font-weight: 600;
+      margin-top: 0.75rem;
+    }
+
+    code.inline {
+      font-family: "Fira Code", "Menlo", monospace;
+      font-size: 0.9rem;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 6px;
+      padding: 0.2rem 0.45rem;
+    }
+
+    details {
+      margin-top: 1rem;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 1.5rem;
+      }
+      main {
+        padding: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>MiAuth 認証が完了しました</h1>
+    <section class="status-card" id="status-card" data-level="info">
+      <div id="status-message">Misskeyからアクセストークンを取得しています…</div>
+    </section>
+
+    <section id="result-section" hidden>
+      <label>MiAuth アクセストークン
+        <input type="text" id="token-field" readonly>
+      </label>
+      <div class="token-actions">
+        <button id="copy-token">トークンをコピー</button>
+        <span id="copy-status" class="meta-info"></span>
+      </div>
+      <div class="meta-info" id="user-info"></div>
+      <details>
+        <summary>詳細情報</summary>
+        <pre id="raw-json" style="white-space: pre-wrap; word-break: break-all;"></pre>
+      </details>
+    </section>
+
+    <section id="error-section" class="status-card" data-level="error" hidden>
+      <div id="error-message"></div>
+    </section>
+
+    <section class="notice" id="next-steps" hidden>
+      <p>このトークンを <code class="inline">index.html</code> の「MiAuthアクセストークン」欄に貼り付け、「トークンを適用」を押してください。</p>
+      <div id="return-link-container"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    const MIAUTH_RESULT_KEY = 'misskeySummarizer.miauth.result';
+    const MIAUTH_PENDING_KEY = 'misskeySummarizer.miauth.pending';
+
+    const statusCard = document.getElementById('status-card');
+    const statusMessage = document.getElementById('status-message');
+    const resultSection = document.getElementById('result-section');
+    const errorSection = document.getElementById('error-section');
+    const errorMessage = document.getElementById('error-message');
+    const tokenField = document.getElementById('token-field');
+    const copyButton = document.getElementById('copy-token');
+    const copyStatus = document.getElementById('copy-status');
+    const userInfo = document.getElementById('user-info');
+    const rawJson = document.getElementById('raw-json');
+    const nextSteps = document.getElementById('next-steps');
+    const returnLinkContainer = document.getElementById('return-link-container');
+
+    function setStatus(level, message) {
+      statusCard.dataset.level = level;
+      statusMessage.textContent = message;
+    }
+
+    function showError(message) {
+      setStatus('error', 'MiAuthトークンの取得に失敗しました');
+      errorSection.hidden = false;
+      errorMessage.textContent = message;
+      resultSection.hidden = true;
+      nextSteps.hidden = true;
+    }
+
+    function normalizeInstance(url) {
+      try {
+        const normalized = new URL(url);
+        if (!/^https?:$/.test(normalized.protocol)) {
+          return '';
+        }
+        normalized.hash = '';
+        return normalized.toString().replace(/\/$/, '');
+      } catch (error) {
+        return '';
+      }
+    }
+
+    async function fetchToken(instanceUrl, sessionId) {
+      const endpoint = new URL(`/api/miauth/${sessionId}/check`, instanceUrl);
+      const response = await fetch(endpoint.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`${response.status} ${response.statusText} ${text}`);
+      }
+      const json = await response.json();
+      if (!json.ok) {
+        throw new Error('MiAuthがキャンセルされたか、セッションが有効期限切れです。');
+      }
+      return json;
+    }
+
+    function persistResult(payload) {
+      try {
+        window.localStorage.setItem(MIAUTH_RESULT_KEY, JSON.stringify(payload));
+        window.localStorage.removeItem(MIAUTH_PENDING_KEY);
+      } catch (error) {
+        console.warn('Failed to persist MiAuth result:', error);
+      }
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'miauth-complete' }, '*');
+        }
+      } catch (error) {
+        console.warn('postMessage failed:', error);
+      }
+    }
+
+    function setupReturnLink(url) {
+      if (!url) return;
+      try {
+        const parsed = new URL(url, window.location.href);
+        const anchor = document.createElement('a');
+        anchor.href = parsed.toString();
+        anchor.textContent = 'index.html に戻る';
+        anchor.className = 'button-link';
+        returnLinkContainer.appendChild(anchor);
+      } catch (error) {
+        console.warn('return link invalid:', error);
+      }
+    }
+
+    function renderResult(instanceUrl, data) {
+      const accountName = data.user?.name || data.user?.username || '未取得';
+      const username = data.user?.username ? `@${data.user.username}` : '';
+      tokenField.value = data.token;
+      userInfo.textContent = `接続中のアカウント: ${accountName} ${username}`;
+      rawJson.textContent = JSON.stringify(data, null, 2);
+      resultSection.hidden = false;
+      nextSteps.hidden = false;
+      setStatus('success', 'アクセストークンを取得しました');
+      copyStatus.textContent = '';
+    }
+
+    async function init() {
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('session') || params.get('miauth_session');
+      const instanceParam = params.get('instance');
+      const returnUrl = params.get('return');
+
+      if (!sessionId) {
+        showError('URLにセッションIDが含まれていません。MiAuthの許可画面から再度お試しください。');
+        return;
+      }
+      const instanceUrl = normalizeInstance(instanceParam || '');
+      if (!instanceUrl) {
+        showError('インスタンスURLを取得できませんでした。index.htmlから認証をやり直してください。');
+        return;
+      }
+
+      setStatus('info', 'MiAuthセッションを確認しています…');
+      try {
+        const data = await fetchToken(instanceUrl, sessionId);
+        const payload = {
+          token: data.token,
+          user: data.user,
+          instanceUrl,
+          timestamp: Date.now(),
+        };
+        persistResult(payload);
+        renderResult(instanceUrl, data);
+        setupReturnLink(returnUrl);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        showError(message);
+      }
+    }
+
+    copyButton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(tokenField.value);
+        copyStatus.textContent = 'コピーしました。index.html に貼り付けてください。';
+      } catch (error) {
+        copyStatus.textContent = 'クリップボードへのコピーに失敗しました。手動で選択してコピーしてください。';
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

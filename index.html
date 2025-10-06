@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Misskey プロフィール要約ジェネレーター</title>
+  <style>
+    :root {
+      --bg: #f9e1ec;
+      --bg-alt: #ffffff;
+      --accent: #f2b6cd;
+      --accent-strong: #e38daa;
+      --border: #e9c9d6;
+      --text: #3a2f33;
+      --muted: #6b5f64;
+      --success: #3a9566;
+      --warning: #c47a1b;
+      --error: #c44d6f;
+      --shadow: rgba(226, 170, 195, 0.35);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #30252c;
+        --bg-alt: #3a2a33;
+        --accent: #d18aa4;
+        --accent-strong: #f6a9c2;
+        --border: #4a3843;
+        --text: #f5e7eb;
+        --muted: #cfb7c2;
+        --shadow: rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans JP", "Noto Sans JP", system-ui, sans-serif;
+      background: linear-gradient(180deg, var(--bg) 0%, #fef4f8 100%);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    header {
+      background: var(--bg-alt);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      box-shadow: 0 2px 10px var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.6rem;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    main {
+      padding: 2rem;
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    section {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 20px var(--shadow);
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 1.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    h2 span.section-subtitle {
+      font-size: 0.9rem;
+      color: var(--muted);
+      font-weight: normal;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    input[type="url"],
+    input[type="number"],
+    input[type="search"],
+    input[type="date"],
+    textarea,
+    select {
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.8rem;
+      font-size: 1rem;
+      background: rgba(255, 255, 255, 0.9);
+      color: inherit;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--accent-strong);
+      box-shadow: 0 0 0 3px rgba(242, 182, 205, 0.35);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .inline {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .chips {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+
+    .chip {
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(242, 182, 205, 0.45);
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.7rem 1.4rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: var(--text);
+      box-shadow: 0 6px 18px rgba(251, 194, 214, 0.4);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    button.primary {
+      background: var(--accent-strong);
+      color: #fff4f9;
+    }
+
+    button.secondary {
+      background: rgba(242, 182, 205, 0.3);
+      color: var(--text);
+      border: 1px solid var(--accent);
+    }
+
+    button.destructive {
+      background: var(--error);
+      color: #fff;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    button:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(242, 182, 205, 0.4);
+    }
+
+    .status {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      background: rgba(255, 255, 255, 0.6);
+      margin-top: 1rem;
+    }
+
+    .status[data-level="success"] {
+      border-color: rgba(58, 149, 102, 0.4);
+      background: rgba(58, 149, 102, 0.12);
+    }
+
+    .status[data-level="warning"] {
+      border-color: rgba(196, 122, 27, 0.35);
+      background: rgba(196, 122, 27, 0.12);
+    }
+
+    .status[data-level="error"] {
+      border-color: rgba(196, 77, 111, 0.35);
+      background: rgba(196, 77, 111, 0.12);
+    }
+
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      font-weight: 600;
+    }
+
+    .status-details {
+      margin-top: 0.5rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+
+    .output-area textarea {
+      width: 100%;
+      min-height: 220px;
+      font-family: "IBM Plex Sans JP", "Noto Sans JP", system-ui, sans-serif;
+    }
+
+    .summary-preview {
+      margin-top: 1rem;
+      padding: 1rem 1.25rem;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      max-height: 360px;
+      overflow-y: auto;
+      line-height: 1.7;
+    }
+
+    .summary-preview h2,
+    .summary-preview h3 {
+      margin-top: 1.2em;
+      margin-bottom: 0.6em;
+      color: var(--text);
+    }
+
+    .summary-preview h2 {
+      font-size: 1.1rem;
+    }
+
+    .summary-preview h3 {
+      font-size: 1rem;
+    }
+
+    .summary-preview p {
+      margin: 0 0 0.9em;
+    }
+
+    .summary-preview ul {
+      margin: 0 0 0.9em 1.2em;
+      padding: 0;
+    }
+
+    .summary-preview li {
+      margin: 0.3em 0;
+    }
+
+    .summary-preview code {
+      font-family: "Fira Code", "Menlo", monospace;
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 4px;
+      padding: 0.1em 0.3em;
+      font-size: 0.9em;
+    }
+
+    .summary-preview .placeholder {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .output-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    details.log-panel {
+      margin-top: 1rem;
+      border-top: 1px dashed var(--border);
+      padding-top: 0.75rem;
+      color: var(--muted);
+    }
+
+    details.log-panel summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    ul.history, ul.errors {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    ul.history li, ul.errors li {
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+      padding: 0.75rem 1rem;
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    ul.errors li {
+      border-color: rgba(196, 77, 111, 0.35);
+    }
+
+    code.inline {
+      font-family: "Fira Code", "Menlo", monospace;
+      font-size: 0.9rem;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 6px;
+      padding: 0.2rem 0.4rem;
+    }
+
+    .tagline {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: rgba(242, 182, 205, 0.35);
+      border-radius: 999px;
+      padding: 0.25rem 0.7rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .badge[data-level="success"] {
+      background: rgba(58, 149, 102, 0.18);
+      color: var(--success);
+    }
+
+    .badge[data-level="warning"] {
+      background: rgba(196, 122, 27, 0.2);
+      color: var(--warning);
+    }
+
+    .badge[data-level="error"] {
+      background: rgba(196, 77, 111, 0.22);
+      color: var(--error);
+    }
+
+    .notice {
+      margin-top: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      background: rgba(242, 182, 205, 0.25);
+      border: 1px dashed var(--accent);
+      font-size: 0.9rem;
+    }
+
+    .manual-token {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .manual-token .micro-hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .manual-token button {
+      align-self: flex-start;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    @media (max-width: 720px) {
+      header {
+        padding: 1.2rem 1.5rem;
+      }
+      main {
+        padding: 1.5rem 1.25rem 2.5rem;
+      }
+      button {
+        width: 100%;
+        justify-content: center;
+      }
+      .inline {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Misskey プロフィール要約ジェネレーター</h1>
+    <p class="tagline">MiAuthまたはエクスポートJSONを使って、自分だけの自己紹介文をAIで生成します。</p>
+  </header>
+  <main>
+    <section id="source-section" aria-labelledby="source-heading">
+      <h2 id="source-heading">1. データソース選択 <span class="section-subtitle">MiAuthまたはJSONからノートを読み込む</span></h2>
+      <div class="inline" role="radiogroup" aria-label="データソースの選択">
+        <label><input type="radio" name="sourceMode" value="miauth" checked> MiAuth で接続</label>
+        <label><input type="radio" name="sourceMode" value="json"> JSON ファイルを読み込む</label>
+        <label><input type="radio" name="sourceMode" value="demo"> デモデータを使う</label>
+      </div>
+      <div id="miauth-panel" class="notice" data-visible="true">
+        <div class="grid-2">
+          <label>MisskeyインスタンスURL
+            <input type="url" id="instance-url" name="instanceUrl" placeholder="https://misskey.io" autocomplete="url" required>
+          </label>
+          <label>取得ノート数 (最大5000)
+            <input type="number" id="note-limit" min="1" max="5000" value="80">
+          </label>
+          <label>キャッシュ取得上限 (最大2000)
+            <input type="number" id="fetch-target" min="10" max="2000" value="200">
+          </label>
+        </div>
+        <div class="inline" style="margin-top: 0.75rem;">
+          <span>公開範囲:</span>
+          <label><input type="checkbox" id="visibility-public" checked> public</label>
+          <label><input type="checkbox" id="visibility-home" checked> home</label>
+          <label><input type="checkbox" id="visibility-followers"> followers</label>
+        </div>
+        <div class="inline" style="margin-top: 0.5rem;">
+          <label><input type="checkbox" id="skip-duplicates" checked> 既存キャッシュと重複するノートを自動的に除外</label>
+        </div>
+        <div class="inline" style="margin-top: 0.75rem;">
+          <button id="miauth-start" class="primary">MiAuth認証を開始</button>
+          <button id="miauth-cancel" class="secondary">セッションをリセット</button>
+          <button id="fetch-notes" class="secondary">ノートを取得/更新</button>
+          <span class="badge" id="miauth-status">未接続</span>
+        </div>
+        <div class="grid-2" style="margin-top: 1rem;">
+          <label>MiAuthアクセストークン
+            <input type="text" id="miauth-token" placeholder="callback.htmlで表示されたトークンを貼り付け" autocomplete="off">
+          </label>
+          <div class="manual-token">
+            <button id="apply-token" class="secondary">トークンを適用</button>
+            <p class="micro-hint">認証後に開く <code class="inline">callback.html</code> のページでトークンが表示されます。コピーしてここに貼り付け、「トークンを適用」を押してください。</p>
+          </div>
+        </div>
+        <p class="notice" id="local-server-hint" hidden>
+          現在 <code class="inline">file://</code> で実行中のためMiAuthのコールバックが完了しません。<br>
+          `python -m http.server` などでローカルサーバーを起動するか、JSONインポートをご利用ください。
+        </p>
+      </div>
+      <div id="json-panel" class="notice" hidden>
+        <label>ノートエクスポートJSONファイル
+          <input type="file" id="json-file" accept="application/json">
+        </label>
+        <p id="json-file-name" class="badge" hidden>ファイル未選択</p>
+        <div class="grid-2" style="margin-top: 1rem;">
+          <label>名前 (オプション)
+            <input type="text" id="manual-name" placeholder="Misskey ユーザー">
+          </label>
+          <label>場所 (オプション)
+            <input type="text" id="manual-location" placeholder="Tokyo, Japan">
+          </label>
+        </div>
+        <label style="margin-top: 1rem;">自己紹介テキスト (オプション)
+          <textarea id="manual-bio" placeholder="Misskeyの自己紹介文を入力"></textarea>
+        </label>
+        <div class="notice" style="margin-top: 1rem;">
+          エクスポートファイルがZIPの場合は、解凍して <code class="inline">notes.json</code> をアップロードしてください。内容はローカルでのみ処理されます。
+        </div>
+      </div>
+      <div id="demo-panel" class="notice" hidden>
+        <p>デモデータを読み込んで機能を試します。実際のアカウント情報は必要ありません。</p>
+        <button id="load-demo" class="secondary">デモデータを読み込む</button>
+      </div>
+      <div class="status" id="note-stats" role="status" aria-live="polite">
+        <div class="status-header">
+          <span id="note-count-label">ノート未取得</span>
+          <span id="note-filter-summary" class="badge">フィルター未設定</span>
+        </div>
+        <div class="status-details" id="note-stat-details">MiAuthまたはJSONを準備してください。</div>
+      </div>
+      <div class="inline" style="margin-top: 0.75rem;">
+        <label><input type="checkbox" id="append-cache" checked> 取得結果をキャッシュに蓄積する</label>
+        <button id="clear-cache" class="secondary">キャッシュをクリア</button>
+        <button id="export-cache" class="secondary">キャッシュをエクスポート</button>
+        <button id="dedupe-cache" class="secondary">重複を整理</button>
+      </div>
+      <div class="status" id="cache-status" aria-live="polite">
+        <div class="status-header">
+          <span id="cache-count-label">キャッシュ: 0件</span>
+          <span id="cache-info-badge" class="badge">未蓄積</span>
+        </div>
+        <div class="status-details" id="cache-details">ノートを取得するとここに蓄積状況が表示されます。</div>
+      </div>
+    </section>
+
+    <section id="filters-section" aria-labelledby="filters-heading">
+      <h2 id="filters-heading">2. ノートフィルター <span class="section-subtitle">AIに渡す投稿を整える</span></h2>
+      <div class="grid-2">
+        <label>含めたいキーワード (スペース区切り)
+          <input type="search" id="include-keywords" placeholder="例: Rust 自作PC">
+        </label>
+        <label>除外したいキーワード (スペース区切り)
+          <input type="search" id="exclude-keywords" placeholder="例: RT 宣伝">
+        </label>
+      </div>
+      <div class="grid-2" style="margin-top: 1rem;">
+        <label>開始日 (オプション)
+          <input type="date" id="date-start">
+        </label>
+        <label>終了日 (オプション)
+          <input type="date" id="date-end">
+        </label>
+      </div>
+      <details class="log-panel" style="margin-top: 1rem;">
+        <summary>フィルターの適用状況</summary>
+        <div id="filter-report" class="status-details">まだフィルターは適用されていません。</div>
+      </details>
+    </section>
+
+    <section id="profile-section" aria-labelledby="profile-heading">
+      <h2 id="profile-heading">3. プロフィール情報 <span class="section-subtitle">AIが参照する基本情報</span></h2>
+      <div class="grid-2">
+        <label>名前
+          <input type="text" id="profile-name" placeholder="自動取得 / 手入力">
+        </label>
+        <label>場所
+          <input type="text" id="profile-location" placeholder="自動取得 / 手入力">
+        </label>
+      </div>
+      <label style="margin-top: 1rem;">自己紹介
+        <textarea id="profile-bio" placeholder="Misskeyのプロフィール文を入力 (自動取得に成功した場合は上書きされます)"></textarea>
+      </label>
+      <div class="status" id="profile-status" aria-live="polite">
+        <div class="status-header">
+          <span>プロフィール情報プレビュー</span>
+        </div>
+        <div class="status-details" id="profile-preview">まだ情報が読み込まれていません。</div>
+      </div>
+    </section>
+
+    <section id="llm-section" aria-labelledby="llm-heading">
+      <h2 id="llm-heading">4. LLM 設定 <span class="section-subtitle">利用するAPIとモデルを指定</span></h2>
+      <div class="grid-2">
+        <label>プリセット
+          <select id="llm-preset">
+            <option value="openai">OpenAI / OpenRouter 互換</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="custom">カスタムHTTP</option>
+          </select>
+        </label>
+        <label>APIキー
+          <input type="text" id="llm-api-key" placeholder="sk- / AIza など">
+        </label>
+      </div>
+      <div class="grid-2" style="margin-top: 1rem;">
+        <label>エンドポイントURL
+          <input type="url" id="llm-base-url" placeholder="https://api.openai.com/v1">
+        </label>
+        <label>モデル名
+          <input type="text" id="llm-model" placeholder="gpt-4o-mini / gemini-1.5-pro など" list="gemini-model-options">
+        </label>
+      </div>
+      <div class="inline" id="model-actions" style="margin-top: 0.75rem;" hidden>
+        <button id="fetch-gemini-models" class="secondary">Geminiモデル一覧を取得</button>
+        <span id="model-status" class="badge">未取得</span>
+      </div>
+      <datalist id="gemini-model-options"></datalist>
+      <div class="grid-2" style="margin-top: 1rem;">
+        <label>温度 (0.0 - 2.0)
+          <input type="number" step="0.1" min="0" max="2" id="llm-temperature" value="0.8">
+        </label>
+        <label>最大トークン (空または0で無制限)
+          <input type="number" id="llm-max-tokens" min="0" placeholder="例: 800" value="800">
+        </label>
+      </div>
+      <div class="grid-2" id="thinking-config" style="margin-top: 1rem;" hidden>
+        <label>Thinking Budget (ms) (空で自動)
+          <input type="number" id="llm-thinking-budget" min="0" placeholder="例: 8000">
+        </label>
+      </div>
+      <div id="custom-endpoint-panel" class="notice" hidden>
+        <label>HTTPメソッド
+          <select id="custom-method">
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+          </select>
+        </label>
+        <label style="margin-top: 0.75rem;">追加ヘッダー (JSON)
+          <textarea id="custom-headers" placeholder='{"X-Example": "value"}'></textarea>
+        </label>
+        <label style="margin-top: 0.75rem;">リクエストボディテンプレート
+          <textarea id="custom-body" placeholder='{"prompt": "{{prompt}}"}'></textarea>
+        </label>
+        <label style="margin-top: 0.75rem;">レスポンスから取り出すパス (dot表記)
+          <input type="text" id="custom-response-path" placeholder="choices.0.message.content">
+        </label>
+      </div>
+      <div class="inline" style="margin-top: 1rem;">
+        <label><input type="checkbox" id="persist-settings"> API設定と入力を保存する (localStorage)</label>
+      </div>
+    </section>
+
+    <section id="prompt-section" aria-labelledby="prompt-heading">
+      <h2 id="prompt-heading">5. プロンプト調整 <span class="section-subtitle">テンプレートをカスタマイズ</span></h2>
+      <label>System Prompt
+        <textarea id="system-prompt"></textarea>
+      </label>
+      <label style="margin-top: 1rem;">User Prompt テンプレート
+        <textarea id="user-template"></textarea>
+      </label>
+      <details class="log-panel" style="margin-top: 1rem;">
+        <summary>利用可能なプレースホルダー</summary>
+        <ul>
+          <li><code class="inline">{{profile_block}}</code> : プロフィール情報 (名前・場所・自己紹介)</li>
+          <li><code class="inline">{{notes_block}}</code> : フィルター済みノート一覧</li>
+          <li><code class="inline">{{note_count}}</code> : ノート件数</li>
+          <li><code class="inline">{{datetime}}</code> : 生成日時 (ISO)</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="generation-section" aria-labelledby="generation-heading">
+      <h2 id="generation-heading">6. 要約を生成 <span class="section-subtitle">AIに自己紹介を書いてもらう</span></h2>
+      <div class="inline">
+        <button id="generate" class="primary">要約を生成</button>
+        <button id="cancel-generation" class="secondary" disabled>キャンセル</button>
+        <span id="generation-hint" class="badge">準備中</span>
+      </div>
+      <div class="status" id="generation-status" aria-live="assertive">
+        <div class="status-header">
+          <span id="status-message">まだ生成は開始されていません。</span>
+          <span id="status-step" class="badge">-</span>
+        </div>
+        <div class="status-details" id="status-details">必要な情報を入力して「要約を生成」を押してください。</div>
+      </div>
+      <details class="log-panel">
+        <summary>詳細ログ</summary>
+        <ul class="errors" id="error-log"></ul>
+      </details>
+    </section>
+
+    <section id="output-section" aria-labelledby="output-heading">
+      <h2 id="output-heading">7. 結果と履歴 <span class="section-subtitle">コピーやダウンロードが可能</span></h2>
+      <div class="output-area">
+        <label class="sr-only" for="summary-output">生成された要約</label>
+        <textarea id="summary-output" placeholder="ここに生成結果が表示されます" readonly></textarea>
+        <div id="summary-preview" class="summary-preview" aria-live="polite"></div>
+        <div class="output-actions">
+          <button id="copy-output" disabled>コピー</button>
+          <button id="download-output" disabled>テキストをダウンロード</button>
+          <button id="reset-output" class="secondary">出力をクリア</button>
+        </div>
+      </div>
+      <details class="log-panel" open>
+        <summary>直近の生成履歴 (最大5件)</summary>
+        <ul class="history" id="history-list"></ul>
+        <button id="clear-history" class="secondary" style="margin-top: 0.75rem;">履歴をクリア</button>
+      </details>
+    </section>
+
+    <section id="help-section" aria-labelledby="help-heading">
+      <h2 id="help-heading">8. ヒントとサポート</h2>
+      <ul>
+        <li>MiAuthが動作しない場合は <code class="inline">python -m http.server</code> などでホストし、`http://localhost` 経由でアクセスしてください。</li>
+        <li>APIキーは保存せずに利用することを推奨します。保存する場合は自己責任でお願いします。</li>
+        <li>生成結果はAIによる推測です。公開前に内容を確認してください。</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.2/dist/purify.min.js" integrity="sha384-Y2u+tbsy03z8jtFrNMeiCU+7VdECSbkt7TIkTU95qOc01ZuCLYXbHnfuJa6WHLHw" crossorigin="anonymous"></script>
+  <script type="module">
+    const elements = {
+      sourceRadios: Array.from(document.querySelectorAll('input[name="sourceMode"]')),
+      miauthPanel: document.getElementById('miauth-panel'),
+      jsonPanel: document.getElementById('json-panel'),
+      demoPanel: document.getElementById('demo-panel'),
+      instanceUrl: document.getElementById('instance-url'),
+      noteLimit: document.getElementById('note-limit'),
+      visibilityPublic: document.getElementById('visibility-public'),
+      visibilityHome: document.getElementById('visibility-home'),
+      visibilityFollowers: document.getElementById('visibility-followers'),
+      miauthStart: document.getElementById('miauth-start'),
+      miauthCancel: document.getElementById('miauth-cancel'),
+      fetchNotesButton: document.getElementById('fetch-notes'),
+      miauthStatus: document.getElementById('miauth-status'),
+      localServerHint: document.getElementById('local-server-hint'),
+      fetchTarget: document.getElementById('fetch-target'),
+      skipDuplicates: document.getElementById('skip-duplicates'),
+      miauthToken: document.getElementById('miauth-token'),
+      applyToken: document.getElementById('apply-token'),
+      jsonFile: document.getElementById('json-file'),
+      jsonFileName: document.getElementById('json-file-name'),
+      manualName: document.getElementById('manual-name'),
+      manualLocation: document.getElementById('manual-location'),
+      manualBio: document.getElementById('manual-bio'),
+      loadDemo: document.getElementById('load-demo'),
+      noteStats: document.getElementById('note-stats'),
+      noteCountLabel: document.getElementById('note-count-label'),
+      noteFilterSummary: document.getElementById('note-filter-summary'),
+      noteStatDetails: document.getElementById('note-stat-details'),
+      appendCache: document.getElementById('append-cache'),
+      clearCache: document.getElementById('clear-cache'),
+      exportCache: document.getElementById('export-cache'),
+      dedupeCache: document.getElementById('dedupe-cache'),
+      cacheStatus: document.getElementById('cache-status'),
+      cacheCountLabel: document.getElementById('cache-count-label'),
+      cacheInfoBadge: document.getElementById('cache-info-badge'),
+      cacheDetails: document.getElementById('cache-details'),
+      includeKeywords: document.getElementById('include-keywords'),
+      excludeKeywords: document.getElementById('exclude-keywords'),
+      dateStart: document.getElementById('date-start'),
+      dateEnd: document.getElementById('date-end'),
+      filterReport: document.getElementById('filter-report'),
+      profileName: document.getElementById('profile-name'),
+      profileLocation: document.getElementById('profile-location'),
+      profileBio: document.getElementById('profile-bio'),
+      profilePreview: document.getElementById('profile-preview'),
+      profileStatus: document.getElementById('profile-status'),
+      llmPreset: document.getElementById('llm-preset'),
+      llmApiKey: document.getElementById('llm-api-key'),
+      llmBaseUrl: document.getElementById('llm-base-url'),
+      llmModel: document.getElementById('llm-model'),
+      llmTemperature: document.getElementById('llm-temperature'),
+      llmMaxTokens: document.getElementById('llm-max-tokens'),
+      llmThinkingBudget: document.getElementById('llm-thinking-budget'),
+      thinkingConfigRow: document.getElementById('thinking-config'),
+      customEndpointPanel: document.getElementById('custom-endpoint-panel'),
+      customMethod: document.getElementById('custom-method'),
+      customHeaders: document.getElementById('custom-headers'),
+      customBody: document.getElementById('custom-body'),
+      customResponsePath: document.getElementById('custom-response-path'),
+      fetchGeminiModels: document.getElementById('fetch-gemini-models'),
+      geminiModelOptions: document.getElementById('gemini-model-options'),
+      modelStatus: document.getElementById('model-status'),
+      modelActions: document.getElementById('model-actions'),
+      persistToggle: document.getElementById('persist-settings'),
+      systemPrompt: document.getElementById('system-prompt'),
+      userTemplate: document.getElementById('user-template'),
+      generateButton: document.getElementById('generate'),
+      cancelButton: document.getElementById('cancel-generation'),
+      generationHint: document.getElementById('generation-hint'),
+      generationStatus: document.getElementById('generation-status'),
+      statusMessage: document.getElementById('status-message'),
+      statusStep: document.getElementById('status-step'),
+      statusDetails: document.getElementById('status-details'),
+      errorLog: document.getElementById('error-log'),
+      outputTextarea: document.getElementById('summary-output'),
+      summaryPreview: document.getElementById('summary-preview'),
+      copyOutput: document.getElementById('copy-output'),
+      downloadOutput: document.getElementById('download-output'),
+      resetOutput: document.getElementById('reset-output'),
+      historyList: document.getElementById('history-list'),
+      clearHistory: document.getElementById('clear-history'),
+      generationHeading: document.getElementById('generation-heading'),
+    };
+
+    const STORAGE_KEY = 'misskeySummarizer.state.v1';
+    const MIAUTH_PENDING_KEY = 'misskeySummarizer.miauth.pending';
+    const MIAUTH_RESULT_KEY = 'misskeySummarizer.miauth.result';
+
+    function sanitizeModelId(id) {
+      if (!id) return '';
+      return id.replace(/^models\//i, '');
+    }
+
+    const demoProfile = {
+      name: '桜庭 りこ',
+      location: 'Tokyo',
+      bio: 'ガジェットと紅茶とライブ遠征が好きなMisskey住民。週1で自炊チャレンジ中。',
+    };
+
+    const demoNotes = [
+      {
+        id: 'demo-001',
+        text: '今日は秋葉原でキーボードのキーキャップを新調。淡いピンクのキーが最高にかわいい。',
+        createdAt: '2025-09-28T14:12:00.000Z',
+        visibility: 'public',
+      },
+      {
+        id: 'demo-002',
+        text: 'Rustで書き直していたMisskeyクライアント、やっとノート投稿まで動いた！テストまだだけど達成感。',
+        createdAt: '2025-09-25T22:45:00.000Z',
+        visibility: 'home',
+      },
+      {
+        id: 'demo-003',
+        text: '遠征計画まとめ：来月は福岡、その次は札幌。ライブハウスの周りでおいしい紅茶が飲めるお店を探し中。',
+        createdAt: '2025-09-20T08:03:00.000Z',
+        visibility: 'public',
+      }
+    ];
+
+    const defaultSystemPrompt = [
+      'リスト記法は対応していないため使用禁止です。列挙する場合は必ず「・」を用いてください。',
+      '出力は日本語で、友好的で少し個性的なトーンにしてください。',
+      '事実に基づき、推測する場合は自然に示してください。'
+    ].join('\n');
+
+    const defaultUserTemplate = `# 命令書\n\n## 制約条件\n- できるだけ簡潔に書いてください。\n- 箇条書きは使用せず、自然な文章にしてください。\n- 入力情報から、興味関心・性格・口調などを推測して文章に反映させてください。\n\n## 入力\n### プロフィール\n{{profile_block}}\n\n### 最近の投稿 ({{note_count}}件)\n{{notes_block}}\n\n## 出力\nプロフィールから読み取れる情報、興味関心、性格、口調を段落でまとめてください。各段落は「・」ではなく文として書き、見出しは「##」「###」を活用してください。`; // eslint-disable-line max-len
+
+    function generateId() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+      if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        const buffer = new Uint8Array(16);
+        window.crypto.getRandomValues(buffer);
+        buffer[6] = (buffer[6] & 0x0f) | 0x40;
+        buffer[8] = (buffer[8] & 0x3f) | 0x80;
+        const hex = Array.from(buffer, (b) => b.toString(16).padStart(2, '0'));
+        return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+      }
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).slice(2, 10);
+      return `${timestamp}-${random}`;
+    }
+
+    const state = {
+      sourceMode: 'miauth',
+      instanceUrl: '',
+      noteLimit: 80,
+      fetchTarget: 200,
+      visibilities: {
+        public: true,
+        home: true,
+        followers: false,
+      },
+      includeKeywords: [],
+      excludeKeywords: [],
+      dateStart: null,
+      dateEnd: null,
+      notesCache: [],
+      notesRaw: [],
+      notesFiltered: [],
+      profile: {
+        name: '',
+        location: '',
+        bio: '',
+      },
+      cache: {
+        append: true,
+        skipDuplicates: true,
+      },
+      llm: {
+        preset: 'openai',
+        apiKey: '',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o-mini',
+        temperature: 0.8,
+        maxTokens: 800,
+        thinkingBudget: null,
+        customMethod: 'POST',
+        customHeaders: '{}',
+        customBody: '{"prompt": "{{prompt}}"}',
+        customResponsePath: 'choices.0.message.content',
+        geminiModels: [],
+        modelSupportsThinking: false,
+      },
+      prompts: {
+        system: defaultSystemPrompt,
+        userTemplate: defaultUserTemplate,
+      },
+      persist: false,
+      errorLog: [],
+      history: [],
+      generation: {
+        inProgress: false,
+        abortController: null,
+      },
+      miauth: {
+        token: null,
+        user: null,
+        sessionId: null,
+        manualToken: '',
+      },
+    };
+
+    function isFileOrigin() {
+      return window.location.origin === 'null' || window.location.protocol === 'file:';
+    }
+
+    function saveState() {
+      if (!state.persist) {
+        window.localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+      const { geminiModels, ...llmPersist } = state.llm;
+      const serializable = {
+        sourceMode: state.sourceMode,
+        instanceUrl: state.instanceUrl,
+        noteLimit: state.noteLimit,
+        visibilities: state.visibilities,
+        includeKeywords: state.includeKeywords,
+        excludeKeywords: state.excludeKeywords,
+        dateStart: state.dateStart,
+        dateEnd: state.dateEnd,
+        fetchTarget: state.fetchTarget,
+        profile: state.profile,
+        llm: llmPersist,
+        prompts: state.prompts,
+        persist: state.persist,
+        cache: state.cache,
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+    }
+
+    function restoreState() {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const restored = JSON.parse(raw);
+        Object.assign(state.visibilities, restored.visibilities ?? {});
+        Object.assign(state.profile, restored.profile ?? {});
+        Object.assign(state.llm, restored.llm ?? {});
+        state.llm.geminiModels = [];
+        if (state.llm.thinkingBudget === undefined) state.llm.thinkingBudget = null;
+        if (state.llm.modelSupportsThinking === undefined) state.llm.modelSupportsThinking = false;
+        Object.assign(state.prompts, restored.prompts ?? {});
+        state.sourceMode = restored.sourceMode ?? state.sourceMode;
+        state.instanceUrl = restored.instanceUrl ?? state.instanceUrl;
+        state.noteLimit = restored.noteLimit ?? state.noteLimit;
+        state.includeKeywords = restored.includeKeywords ?? [];
+        state.excludeKeywords = restored.excludeKeywords ?? [];
+        state.dateStart = restored.dateStart ?? null;
+        state.dateEnd = restored.dateEnd ?? null;
+        state.fetchTarget = restored.fetchTarget ?? state.fetchTarget;
+        state.persist = restored.persist ?? false;
+        if (restored.cache) {
+          Object.assign(state.cache, restored.cache);
+        }
+      } catch (error) {
+        console.error('状態復元に失敗', error);
+      }
+    }
+
+    function updateSourcePanels() {
+      elements.miauthPanel.hidden = state.sourceMode !== 'miauth';
+      elements.jsonPanel.hidden = state.sourceMode !== 'json';
+      elements.demoPanel.hidden = state.sourceMode !== 'demo';
+      elements.miauthPanel.dataset.visible = state.sourceMode === 'miauth';
+      if (isFileOrigin()) {
+        elements.localServerHint.hidden = state.sourceMode !== 'miauth';
+      } else {
+        elements.localServerHint.hidden = true;
+      }
+    }
+
+    function setStatus(message, details = '', level = 'info') {
+      elements.statusMessage.textContent = message;
+      elements.statusDetails.textContent = details;
+      elements.generationStatus.dataset.level = level;
+    }
+
+    function setStepBadge(text) {
+      elements.statusStep.textContent = text;
+    }
+
+    function setGenerationHint(text) {
+      elements.generationHint.textContent = text;
+    }
+
+    function updateFetchControls() {
+      const enabled = Boolean(state.miauth.token && state.instanceUrl);
+      elements.fetchNotesButton.disabled = !enabled;
+    }
+
+    function updateSummaryPreview(text) {
+      if (!text || !text.trim()) {
+        elements.summaryPreview.innerHTML = '<p class="placeholder">生成結果はまだありません。</p>';
+        return;
+      }
+      const markedLib = window.marked;
+      const purifier = window.DOMPurify;
+      if (markedLib && typeof markedLib.parse === 'function') {
+        const rawHtml = markedLib.parse(text, { breaks: true });
+        const safeHtml = purifier && typeof purifier.sanitize === 'function'
+          ? purifier.sanitize(rawHtml)
+          : rawHtml;
+        elements.summaryPreview.innerHTML = safeHtml;
+      } else {
+        elements.summaryPreview.innerHTML = `<pre>${text.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]))}</pre>`;
+      }
+    }
+
+    function setModelStatus(text, level = 'info') {
+      elements.modelStatus.textContent = text;
+      elements.modelStatus.dataset.level = level;
+    }
+
+    function updateCacheStatus(sourceLabel = null, deltaCount = null) {
+      const total = state.notesCache.length;
+      elements.cacheCountLabel.textContent = `キャッシュ: ${total}件`;
+      if (total === 0) {
+        elements.cacheInfoBadge.textContent = '未蓄積';
+        elements.cacheInfoBadge.dataset.level = 'info';
+        if (sourceLabel) {
+          elements.cacheDetails.textContent = `ソース: ${sourceLabel}\nキャッシュは空です。`;
+        } else {
+          elements.cacheDetails.textContent = 'ノートを取得するとここに蓄積状況が表示されます。';
+        }
+        return;
+      }
+      const modeText = state.cache.append ? '追記モード' : '上書きモード';
+      elements.cacheInfoBadge.textContent = modeText;
+      elements.cacheInfoBadge.dataset.level = state.cache.append ? 'success' : 'warning';
+      const chunks = [`最終更新: ${new Date().toLocaleString()}`];
+      if (sourceLabel) {
+        chunks.push(`ソース: ${sourceLabel}`);
+      }
+      if (deltaCount !== null && deltaCount !== 0) {
+        const label = deltaCount >= 0 ? '追加/更新' : '削除';
+        chunks.push(`${label}: ${Math.abs(deltaCount)}件`);
+      }
+      chunks.push(`重複処理: ${state.cache.skipDuplicates ? '新規IDのみ追加' : '常に最新で上書き'}`);
+      const uniqueVis = new Set(state.notesCache.map((note) => note.visibility || '不明'));
+      chunks.push(`可視範囲: ${Array.from(uniqueVis).join(', ') || '不明'}`);
+      elements.cacheDetails.textContent = chunks.join('\n');
+    }
+
+    function renderGeminiModelOptions() {
+      elements.geminiModelOptions.innerHTML = '';
+      state.llm.geminiModels.forEach((model) => {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.label = model.displayName ? `${model.displayName} (${model.id})` : model.id;
+        elements.geminiModelOptions.appendChild(option);
+      });
+    }
+
+    function detectGeminiThinkingSupport(model) {
+      if (!model) return false;
+      if (model.thinking === true) return true;
+      if (model.capabilities?.reasoning === true) return true;
+      if (model.capabilities?.advancedReasoning === true) return true;
+      if (Array.isArray(model.supportedGenerationMethods)) {
+        const methods = model.supportedGenerationMethods.map((m) => m.toLowerCase());
+        if (methods.includes('generatethinking') || methods.includes('thinking') || methods.includes('generateanswer')) {
+          return true;
+        }
+      }
+      if (model.name && /thinking|reasoning/i.test(model.name)) return true;
+      return false;
+    }
+
+    function validateSelectedModel() {
+      if (state.llm.preset !== 'gemini') {
+        setModelStatus('Geminiプリセット以外', 'info');
+        state.llm.modelSupportsThinking = false;
+        elements.thinkingConfigRow.hidden = true;
+        saveState();
+        return;
+      }
+      if (!state.llm.model) {
+        setModelStatus('モデル未指定', 'warning');
+        state.llm.modelSupportsThinking = false;
+        elements.thinkingConfigRow.hidden = true;
+        saveState();
+        return;
+      }
+      const match = state.llm.geminiModels.find((m) =>
+        m.id === state.llm.model ||
+        m.originalName === state.llm.model ||
+        m.displayName === state.llm.model
+      );
+      if (match) {
+        setModelStatus('利用可能なモデル', 'success');
+        state.llm.modelSupportsThinking = match.supportsThinking ?? detectGeminiThinkingSupport(match.raw || match);
+        state.llm.model = match.id;
+      } else {
+        setModelStatus('未検証のモデル', 'warning');
+        state.llm.modelSupportsThinking = false;
+      }
+      elements.thinkingConfigRow.hidden = !state.llm.modelSupportsThinking;
+      saveState();
+      elements.llmModel.value = state.llm.model;
+    }
+
+    function syncLlmInputs() {
+      state.llm.apiKey = elements.llmApiKey.value.trim();
+      state.llm.baseUrl = elements.llmBaseUrl.value.trim();
+      const sanitizedModel = sanitizeModelId(elements.llmModel.value.trim());
+      state.llm.model = sanitizedModel;
+      elements.llmModel.value = sanitizedModel;
+      const tempValue = Number(elements.llmTemperature.value);
+      state.llm.temperature = Number.isFinite(tempValue) ? tempValue : 0.8;
+      const maxTokenInput = elements.llmMaxTokens.value.trim();
+      if (maxTokenInput === '') {
+        state.llm.maxTokens = null;
+      } else {
+        const maxValue = Number(maxTokenInput);
+        state.llm.maxTokens = Number.isFinite(maxValue) && maxValue > 0 ? Math.round(maxValue) : null;
+      }
+      const thinkingInput = elements.llmThinkingBudget.value.trim();
+      if (thinkingInput === '') {
+        state.llm.thinkingBudget = null;
+      } else {
+        const thinkValue = Number(thinkingInput);
+        state.llm.thinkingBudget = Number.isFinite(thinkValue) && thinkValue > 0 ? Math.round(thinkValue) : null;
+      }
+      saveState();
+      if (state.llm.preset === 'gemini') {
+        validateSelectedModel();
+      }
+    }
+
+    async function fetchGeminiModelList() {
+      if (state.llm.preset !== 'gemini') {
+        setModelStatus('Geminiプリセットでのみ利用できます', 'warning');
+        return;
+      }
+      if (!state.llm.apiKey) {
+        setModelStatus('Gemini APIキーを入力してください', 'warning');
+        return;
+      }
+      const base = (state.llm.baseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
+      try {
+        setModelStatus('モデルを取得中…', 'info');
+        const models = [];
+        let nextPageToken = undefined;
+        do {
+          const url = new URL(`${base}/models`);
+          url.searchParams.set('key', state.llm.apiKey);
+          if (nextPageToken) {
+            url.searchParams.set('pageToken', nextPageToken);
+          }
+          const response = await fetch(url.toString());
+          if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            throw new Error(`${response.status} ${response.statusText} ${text}`);
+          }
+          const data = await response.json();
+          if (Array.isArray(data.models)) {
+            models.push(...data.models);
+          }
+          nextPageToken = data.nextPageToken;
+        } while (nextPageToken);
+        const usable = models
+          .filter((model) => {
+            if (!model || !model.name) return false;
+            const methods = Array.isArray(model.supportedGenerationMethods)
+              ? model.supportedGenerationMethods.map((m) => m.toLowerCase())
+              : [];
+            // Exclude embedding / predict-only models
+            if (methods.length === 0) return false;
+            if (!methods.includes('generatecontent') && !methods.includes('bidigeneratecontent')) return false;
+            // Filter out Imagen and embedding families
+            if (/embedding|imagen|predict/i.test(model.name) || /embedding|imagen/i.test(model.displayName ?? '')) return false;
+            return true;
+          })
+          .map((model) => ({
+            originalName: model.name ?? '',
+            id: sanitizeModelId(model.name ?? ''),
+            displayName: model.displayName ?? '',
+            supportsThinking: detectGeminiThinkingSupport(model),
+            raw: model,
+          }))
+          .filter((model) => model.id);
+        usable.sort((a, b) => a.id.localeCompare(b.id));
+        state.llm.geminiModels = usable;
+        renderGeminiModelOptions();
+        if (usable.length === 0) {
+          setModelStatus('利用可能なモデルが見つかりませんでした', 'warning');
+        } else {
+          const thinkingCount = usable.filter((m) => m.supportsThinking).length;
+          setModelStatus(`${usable.length}件のモデル (Thinking対応: ${thinkingCount})`, 'success');
+        }
+        validateSelectedModel();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setModelStatus(`取得失敗: ${message}`, 'error');
+        logError('Geminiモデル取得エラー', message);
+      }
+    }
+
+    function updateProfilePreview() {
+      const { name, location, bio } = state.profile;
+      const lines = [];
+      if (name) lines.push(`名前: ${name}`);
+      if (location) lines.push(`場所: ${location}`);
+      if (bio) lines.push(`自己紹介: ${bio}`);
+      elements.profilePreview.textContent = lines.length ? lines.join('\n') : 'まだ情報が読み込まれていません。';
+    }
+
+    function updateNoteStats() {
+      const total = state.notesCache.length;
+      const filtered = state.notesFiltered.length;
+      if (total === 0) {
+        elements.noteCountLabel.textContent = 'ノート未取得';
+        elements.noteStatDetails.textContent = 'MiAuth認証またはJSONインポートを完了してください。';
+        elements.noteFilterSummary.textContent = 'フィルター未設定';
+        return;
+      }
+      elements.noteCountLabel.textContent = `フィルター結果: ${filtered} / ${total}`;
+      const activeVisibility = Object.entries(state.visibilities)
+        .filter(([, v]) => v)
+        .map(([k]) => k)
+        .join(', ');
+      elements.noteFilterSummary.textContent = `可視範囲: ${activeVisibility || 'なし'}`;
+      const keywordsInfo = [];
+      if (state.includeKeywords.length) {
+        keywordsInfo.push(`含める: ${state.includeKeywords.join(', ')}`);
+      }
+      if (state.excludeKeywords.length) {
+        keywordsInfo.push(`除外: ${state.excludeKeywords.join(', ')}`);
+      }
+      if (state.dateStart || state.dateEnd) {
+        keywordsInfo.push(`期間: ${state.dateStart || '指定なし'} 〜 ${state.dateEnd || '指定なし'}`);
+      }
+      const details = [
+        `キャッシュ済み: ${total}件 / 表示上限: ${state.noteLimit}件 / 取得上限: ${state.fetchTarget}件`,
+        keywordsInfo.join(' / ') || 'キーワードフィルターなし。'
+      ].join('\n');
+      elements.noteStatDetails.textContent = details;
+    }
+
+    function logError(message, detail) {
+      const entry = {
+        id: generateId(),
+        timestamp: new Date().toISOString(),
+        message,
+        detail,
+      };
+      state.errorLog.unshift(entry);
+      if (state.errorLog.length > 50) state.errorLog.pop();
+      renderErrorLog();
+    }
+
+    function renderErrorLog() {
+      elements.errorLog.innerHTML = '';
+      if (state.errorLog.length === 0) {
+        const empty = document.createElement('li');
+        empty.textContent = 'エラーは発生していません。';
+        elements.errorLog.appendChild(empty);
+        return;
+      }
+      state.errorLog.forEach((entry) => {
+        const li = document.createElement('li');
+        const header = document.createElement('strong');
+        header.textContent = `[${new Date(entry.timestamp).toLocaleString()}] ${entry.message}`;
+        const detail = document.createElement('pre');
+        detail.textContent = entry.detail ?? '';
+        li.appendChild(header);
+        li.appendChild(detail);
+        elements.errorLog.appendChild(li);
+      });
+    }
+
+    function renderHistory() {
+      elements.historyList.innerHTML = '';
+      if (state.history.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = '履歴はまだありません。';
+        elements.historyList.appendChild(li);
+        return;
+      }
+      state.history.forEach((item) => {
+        const li = document.createElement('li');
+        const title = document.createElement('strong');
+        title.textContent = `${new Date(item.timestamp).toLocaleString()} (${item.noteCount}件)`;
+        const preview = document.createElement('p');
+        preview.textContent = item.summary.slice(0, 160) + (item.summary.length > 160 ? '…' : '');
+        const btn = document.createElement('button');
+        btn.textContent = '復元';
+        btn.className = 'secondary';
+        btn.addEventListener('click', () => {
+          setOutput(item.summary);
+          setStatus('履歴を復元しました', `タイムスタンプ: ${new Date(item.timestamp).toLocaleString()}`, 'success');
+        });
+        li.appendChild(title);
+        li.appendChild(preview);
+        li.appendChild(btn);
+        elements.historyList.appendChild(li);
+      });
+    }
+
+    function applySourceMode(mode) {
+      state.sourceMode = mode;
+      updateSourcePanels();
+      saveState();
+    }
+
+    function setProfile(profile) {
+      state.profile = { ...state.profile, ...profile };
+      elements.profileName.value = state.profile.name ?? '';
+      elements.profileLocation.value = state.profile.location ?? '';
+      elements.profileBio.value = state.profile.bio ?? '';
+      updateProfilePreview();
+      saveState();
+    }
+
+    function normalizeNote(note) {
+      if (!note || typeof note !== 'object') return null;
+      const text = [note.cw ? `【CW: ${note.cw}】` : '', note.text || note.note || '']
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      const createdAt = note.createdAt || note.created_at || note.date;
+      const visibility = note.visibility || note.scope || 'public';
+      return {
+        id: note.id || generateId(),
+        text,
+        createdAt,
+        visibility,
+      };
+    }
+
+    function applyNotes(notes, sourceLabel) {
+      const normalized = notes
+        .map(normalizeNote)
+        .filter((item) => item && item.text);
+
+      const existingMap = new Map(state.notesCache.map((note) => [note.id, note]));
+      let incoming = normalized;
+      if (state.cache.append && state.cache.skipDuplicates) {
+        incoming = incoming.filter((note) => !existingMap.has(note.id));
+      }
+
+      let delta = 0;
+      if (state.cache.append) {
+        incoming.forEach((note) => {
+          if (!existingMap.has(note.id)) {
+            delta += 1;
+          }
+          existingMap.set(note.id, note);
+        });
+      } else {
+        existingMap.clear();
+        normalized.forEach((note) => {
+          existingMap.set(note.id, note);
+        });
+        delta = normalized.length;
+      }
+
+      const merged = Array.from(existingMap.values()).sort((a, b) => {
+        const dateA = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const dateB = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return dateB - dateA;
+      });
+
+      state.notesCache = merged;
+      state.notesRaw = [...state.notesCache];
+      filterNotes();
+      updateNoteStats();
+      updateCacheStatus(sourceLabel, delta);
+      setStatus(`${sourceLabel}からノートを読み込みました`, `${state.notesFiltered.length}件をフィルター後に保持しています。`, 'success');
+    }
+
+    function parseKeywordInput(input) {
+      return input
+        .split(/\s+/)
+        .map((word) => word.trim())
+        .filter(Boolean);
+    }
+
+    function filterNotes() {
+      let filtered = [...state.notesCache];
+      filtered = filtered.filter((note) => {
+        const v = note.visibility || 'public';
+        return state.visibilities[v] ?? false;
+      });
+      if (state.includeKeywords.length) {
+        filtered = filtered.filter((note) =>
+          state.includeKeywords.some((kw) => note.text?.includes(kw))
+        );
+      }
+      if (state.excludeKeywords.length) {
+        filtered = filtered.filter((note) =>
+          state.excludeKeywords.every((kw) => !note.text?.includes(kw))
+        );
+      }
+      if (state.dateStart) {
+        filtered = filtered.filter((note) => !note.createdAt || note.createdAt >= state.dateStart);
+      }
+      if (state.dateEnd) {
+        filtered = filtered.filter((note) => !note.createdAt || note.createdAt <= `${state.dateEnd}T23:59:59`);
+      }
+      state.notesFiltered = filtered.slice(0, state.noteLimit);
+      const reportLines = [
+        `対象ノート数: ${state.notesFiltered.length}`,
+        `可視範囲: ${Object.entries(state.visibilities).filter(([, v]) => v).map(([k]) => k).join(', ')}`,
+        state.includeKeywords.length ? `含めるキーワード: ${state.includeKeywords.join(', ')}` : '含めるキーワード: なし',
+        state.excludeKeywords.length ? `除外キーワード: ${state.excludeKeywords.join(', ')}` : '除外キーワード: なし',
+        state.dateStart ? `開始日: ${state.dateStart}` : '開始日: 指定なし',
+        state.dateEnd ? `終了日: ${state.dateEnd}` : '終了日: 指定なし',
+      ];
+      elements.filterReport.textContent = reportLines.join('\n');
+      updateNoteStats();
+    }
+
+    function computeNotesBlock() {
+      if (state.notesFiltered.length === 0) {
+        return 'ノートが見つかりませんでした。';
+      }
+      return state.notesFiltered.map((note) => {
+        const date = note.createdAt ? new Date(note.createdAt).toLocaleString('ja-JP') : '日時不明';
+        return `・${date} (${note.visibility}) ${note.text}`;
+      }).join('\n');
+    }
+
+    function computeProfileBlock() {
+      const { name, location, bio } = state.profile;
+      return [`- 名前: ${name || '不明'}`, `- 場所: ${location || '不明'}`, `- 自己紹介: ${bio || '未入力'}`].join('\n');
+    }
+
+    function renderPromptTemplate() {
+      elements.systemPrompt.value = state.prompts.system;
+      elements.userTemplate.value = state.prompts.userTemplate;
+    }
+
+    function updatePresetDefaults() {
+      if (state.llm.preset === 'openai') {
+        if (!state.llm.baseUrl || state.llm.baseUrl.includes('generativelanguage')) {
+          state.llm.baseUrl = 'https://api.openai.com/v1';
+        }
+        if (!state.llm.model || state.llm.model.includes('gemini')) {
+          state.llm.model = 'gpt-4o-mini';
+        }
+      } else if (state.llm.preset === 'gemini') {
+        state.llm.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+        const currentModel = sanitizeModelId(state.llm.model);
+        if (!currentModel || !currentModel.startsWith('gemini')) {
+          state.llm.model = 'gemini-1.5-flash';
+        } else {
+          state.llm.model = currentModel;
+        }
+      }
+      elements.llmBaseUrl.value = state.llm.baseUrl;
+      elements.llmModel.value = state.llm.model;
+    }
+
+    function setLLMUiByPreset() {
+      updatePresetDefaults();
+      elements.customEndpointPanel.hidden = state.llm.preset !== 'custom';
+      elements.modelActions.hidden = state.llm.preset !== 'gemini';
+      if (state.llm.preset !== 'gemini') {
+        elements.thinkingConfigRow.hidden = true;
+        setModelStatus('Geminiプリセットでモデルを取得できます', 'info');
+      } else {
+        validateSelectedModel();
+      }
+    }
+
+    function buildPrompt() {
+      const context = {
+        profile_block: computeProfileBlock(),
+        notes_block: computeNotesBlock(),
+        note_count: String(state.notesFiltered.length),
+        datetime: new Date().toISOString(),
+      };
+      return renderTemplate(state.prompts.userTemplate, context);
+    }
+
+    function renderTemplate(template, context) {
+      return template.replace(/\{\{(.*?)\}\}/g, (_, key) => {
+        const trimmed = key.trim();
+        return context[trimmed] ?? `{{${trimmed}}}`;
+      });
+    }
+
+    async function startMiAuthFlow() {
+      if (isFileOrigin()) {
+        setStatus('MiAuthはfileスキームでは利用できません', 'ローカルサーバー経由でアクセスするか、JSONインポートをご利用ください。', 'error');
+        return;
+      }
+      try {
+        const instanceUrl = normalizeInstanceUrl(elements.instanceUrl.value.trim() || state.instanceUrl);
+        if (!instanceUrl) {
+          setStatus('インスタンスURLを入力してください', '', 'warning');
+          return;
+        }
+        state.instanceUrl = instanceUrl;
+        const sessionId = generateId();
+        state.miauth.sessionId = sessionId;
+        const callbackUrl = new URL('callback.html', window.location.href);
+        callbackUrl.searchParams.set('instance', instanceUrl);
+        callbackUrl.searchParams.set('return', window.location.href);
+        const permissions = ['read:account', 'read:notes'];
+        const miauthUrl = new URL(`/miauth/${sessionId}`, instanceUrl);
+        miauthUrl.searchParams.set('name', 'Profile Summary');
+        miauthUrl.searchParams.set('callback', callbackUrl.toString());
+        miauthUrl.searchParams.set('permission', permissions.join(','));
+        window.localStorage.setItem(MIAUTH_PENDING_KEY, JSON.stringify({ sessionId, instanceUrl, createdAt: Date.now() }));
+        const popup = window.open(miauthUrl.toString(), '_blank', 'noopener');
+        if (!popup) {
+          setStatus('ポップアップを許可してください', 'リンクを新しいタブで手動で開くこともできます。', 'warning');
+          window.open(miauthUrl.toString(), '_blank');
+        } else {
+          setStatus('MiAuthを開始しました', 'Misskeyの許可後に表示されるcallback.htmlのトークンをコピーしてください。', 'info');
+        }
+        elements.miauthStatus.textContent = '待機中...';
+      } catch (error) {
+        logError('MiAuthの開始に失敗しました', error instanceof Error ? error.message : String(error));
+        setStatus('MiAuth開始に失敗しました', 'インスタンスURLやネットワークを確認してください。', 'error');
+      }
+    }
+
+    function normalizeInstanceUrl(url) {
+      if (!url) return '';
+      try {
+        const normalized = new URL(url);
+        if (!/^https?:$/.test(normalized.protocol)) {
+          return '';
+        }
+        normalized.hash = '';
+        normalized.search = '';
+        return normalized.toString().replace(/\/$/, '');
+      } catch (error) {
+        return '';
+      }
+    }
+
+    async function completeMiAuth(sessionId) {
+      try {
+        const pendingRaw = window.localStorage.getItem(MIAUTH_PENDING_KEY);
+        if (!pendingRaw) {
+          throw new Error('MiAuthセッションが見つかりません。');
+        }
+        const pending = JSON.parse(pendingRaw);
+        if (pending.sessionId !== sessionId) {
+          throw new Error('セッションIDが一致しません。');
+        }
+        const instanceUrl = pending.instanceUrl;
+        const checkUrl = new URL(`/api/miauth/${sessionId}/check`, instanceUrl);
+        const response = await fetch(checkUrl.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) {
+          throw new Error(`MiAuth確認に失敗しました: ${response.status}`);
+        }
+        const data = await response.json();
+        if (!data.ok) {
+          throw new Error('MiAuthがキャンセルされました。');
+        }
+        state.miauth.token = data.token;
+        state.miauth.user = data.user;
+        state.instanceUrl = instanceUrl;
+        elements.instanceUrl.value = instanceUrl;
+        elements.miauthStatus.textContent = `${data.user?.name ?? data.user?.username ?? 'ユーザー'} として接続`;
+        updateFetchControls();
+        window.localStorage.removeItem(MIAUTH_PENDING_KEY);
+        window.localStorage.setItem(MIAUTH_RESULT_KEY, JSON.stringify({ token: data.token, user: data.user, instanceUrl, timestamp: Date.now() }));
+        await fetchProfileAndNotes();
+        setStatus('MiAuth認証が完了しました', 'プロフィールとノートを取得しました。', 'success');
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'miauth-complete', sessionId }, '*');
+          window.close();
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logError('MiAuth完了処理でエラー', message);
+        setStatus('MiAuth完了処理でエラー', message, 'error');
+      }
+    }
+
+    async function fetchAndApplyNotes({ refreshProfile = false, sourceLabel = 'MiAuth' } = {}) {
+      if (!state.miauth.token || !state.instanceUrl) {
+        setStatus('MiAuthトークンが見つかりません', '再度MiAuthを実行してください。', 'warning');
+        return;
+      }
+      try {
+        let userId = state.miauth.user?.id;
+        if (refreshProfile || !userId) {
+          setStepBadge('プロフィール取得中');
+          const profileResponse = await postJson(`${state.instanceUrl}/api/i`, { i: state.miauth.token });
+          setProfile({
+            name: profileResponse.name || profileResponse.username || state.profile.name,
+            location: profileResponse.location || '',
+            bio: profileResponse.description || '',
+          });
+          state.miauth.user = profileResponse;
+          userId = profileResponse.id;
+        }
+        if (!userId) {
+          throw new Error('ユーザーIDを取得できませんでした。');
+        }
+        setStepBadge('ノート取得中');
+        const notes = await fetchNotes(userId);
+        applyNotes(notes, sourceLabel);
+        filterNotes();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logError('Misskey APIからのデータ取得に失敗', message);
+        setStatus('Misskey APIから取得に失敗しました', message, 'error');
+      }
+    }
+
+    async function fetchProfileAndNotes() {
+      await fetchAndApplyNotes({ refreshProfile: true, sourceLabel: 'MiAuth' });
+    }
+
+    async function fetchNotes(userId) {
+      const result = [];
+      let nextUntilId = undefined;
+      const limit = Math.min(Math.max(state.fetchTarget, 10), 2000);
+      while (result.length < limit) {
+        const remaining = limit - result.length;
+        const batchLimit = Math.min(100, remaining);
+        const payload = {
+          userId,
+          limit: batchLimit,
+          withReplies: false,
+          withRenotes: false,
+          withFiles: true,
+          includeMyRenotes: false,
+          includeReplies: false,
+          allowPartial: true,
+          i: state.miauth.token,
+        };
+        if (nextUntilId) {
+          payload.untilId = nextUntilId;
+        }
+        const batch = await postJson(`${state.instanceUrl}/api/users/notes`, payload);
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        result.push(...batch);
+        nextUntilId = batch[batch.length - 1].id;
+        if (batch.length < batchLimit) break;
+      }
+      return result;
+    }
+
+    async function postJson(url, body) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`${url} -> ${response.status} ${response.statusText} ${text}`);
+      }
+      return response.json();
+    }
+
+    async function applyManualToken() {
+      const instanceInput = elements.instanceUrl.value.trim() || state.instanceUrl;
+      const instanceUrl = normalizeInstanceUrl(instanceInput);
+      const token = (state.miauth.manualToken || '').trim();
+      if (!instanceUrl) {
+        setStatus('インスタンスURLを入力してください', '例: https://misskey.io', 'warning');
+        return;
+      }
+      if (!token) {
+        setStatus('MiAuthアクセストークンを入力してください', 'callback.htmlで取得した値を貼り付けます。', 'warning');
+        return;
+      }
+      try {
+        state.instanceUrl = instanceUrl;
+        elements.instanceUrl.value = instanceUrl;
+        state.miauth.token = token;
+        state.miauth.manualToken = token;
+        elements.miauthStatus.textContent = '手動トークン適用済み';
+        updateFetchControls();
+        setStatus('MiAuthトークンを適用しました', 'プロフィールとノートを取得しています。', 'info');
+        await fetchAndApplyNotes({ refreshProfile: true, sourceLabel: '手動適用' });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logError('手動トークン適用でエラー', message);
+        setStatus('MiAuthトークン適用でエラー', message, 'error');
+      }
+    }
+
+    function handleJsonFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = reader.result;
+          if (typeof text !== 'string') throw new Error('ファイルを文字列として読み込めませんでした');
+          const parsed = JSON.parse(text);
+          let notes = [];
+          if (Array.isArray(parsed)) {
+            notes = parsed;
+          } else if (Array.isArray(parsed.notes)) {
+            notes = parsed.notes;
+          } else if (Array.isArray(parsed.data)) {
+            notes = parsed.data;
+          } else {
+            throw new Error('ノート配列が見つかりません。`notes`キーを確認してください。');
+          }
+          applyNotes(notes, file.name);
+          setStatus('JSONを読み込みました', `${notes.length}件のノートを検出しました。`, 'success');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logError('JSONの解析に失敗', message);
+          setStatus('JSONの解析に失敗しました', message, 'error');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function setOutput(text) {
+      elements.outputTextarea.value = text;
+      const active = Boolean(text);
+      elements.copyOutput.disabled = !active;
+      elements.downloadOutput.disabled = !active;
+      updateSummaryPreview(text || '');
+    }
+
+    function appendHistory(summary) {
+      state.history.unshift({
+        id: generateId(),
+        timestamp: Date.now(),
+        noteCount: state.notesFiltered.length,
+        summary,
+      });
+      if (state.history.length > 5) state.history.pop();
+      renderHistory();
+    }
+
+    function updatePersistToggle() {
+      elements.persistToggle.checked = state.persist;
+    }
+
+    function setGenerationInProgress(value) {
+      state.generation.inProgress = value;
+      elements.generateButton.disabled = value;
+      elements.cancelButton.disabled = !value;
+      setGenerationHint(value ? '生成中' : '待機中');
+    }
+
+    function parseHeadersJson(value) {
+      if (!value) return {};
+      try {
+        return JSON.parse(value);
+      } catch (error) {
+        throw new Error('ヘッダーは正しいJSON形式で指定してください。');
+      }
+    }
+
+    function getResponseByPath(obj, path) {
+      if (!path) return obj;
+      return path.split('.').reduce((acc, key) => (acc && key in acc ? acc[key] : undefined), obj);
+    }
+
+    async function ensureNotesPrepared() {
+      const desired = Math.min(state.fetchTarget, state.noteLimit);
+      if (state.notesFiltered.length >= desired || state.notesCache.length >= desired) {
+        return true;
+      }
+      if (state.miauth.token && state.instanceUrl) {
+        await fetchAndApplyNotes({ refreshProfile: !state.miauth.user, sourceLabel: '自動取得' });
+        return state.notesFiltered.length > 0;
+      }
+      return state.notesFiltered.length > 0;
+    }
+
+    async function generateSummary() {
+      const ok = await ensureNotesPrepared();
+      if (!ok) {
+        setStatus('ノートが選択されていません', 'MiAuthまたはJSONからノートを取得してください。', 'warning');
+        return;
+      }
+      if (!state.llm.apiKey) {
+        setStatus('APIキーを入力してください', 'OpenAI/Gemini/カスタムのキーを設定してください。', 'warning');
+        return;
+      }
+      const controller = new AbortController();
+      state.generation.abortController = controller;
+      setGenerationInProgress(true);
+      setStepBadge('LLMリクエスト準備中');
+      setStatus('LLMリクエストを準備しています', '', 'info');
+      try {
+        const prompt = buildPrompt();
+        const requestInit = await buildLlmRequest(prompt, controller.signal);
+        setStepBadge('LLM呼び出し中');
+        const response = await fetch(requestInit.url, requestInit.init);
+        if (!response.ok) {
+          const body = await response.text().catch(() => '');
+          throw new Error(`LLMリクエストに失敗しました: ${response.status} ${response.statusText}\n${body}`);
+        }
+        const json = await response.json();
+        const text = extractSummaryFromResponse(json);
+        setOutput(text);
+        appendHistory(text);
+        setGenerationInProgress(false);
+        setStatus('要約が完了しました', `${text.length}文字の要約を受信しました。`, 'success');
+      } catch (error) {
+        if ((error instanceof DOMException) && error.name === 'AbortError') {
+          setStatus('生成をキャンセルしました', '', 'warning');
+        } else {
+          const message = error instanceof Error ? error.message : String(error);
+          logError('要約生成でエラー', message);
+          setStatus('要約生成でエラーが発生しました', message, 'error');
+        }
+        setGenerationInProgress(false);
+      }
+    }
+
+    async function buildLlmRequest(prompt, signal) {
+      const { preset, apiKey, baseUrl, model, temperature, maxTokens, thinkingBudget, customMethod, customHeaders, customBody } = state.llm;
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      if (preset === 'gemini') {
+        const modelId = sanitizeModelId(model);
+        const url = `${baseUrl.replace(/\/$/, '')}/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const body = {
+          contents: [
+            {
+              parts: [
+                { text: state.prompts.system },
+                { text: prompt },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature,
+          },
+        };
+        if (Number.isFinite(maxTokens) && maxTokens > 0) {
+          body.generationConfig.maxOutputTokens = maxTokens;
+        }
+        if (Number.isFinite(thinkingBudget) && thinkingBudget > 0) {
+          body.generationConfig.thinkingConfig = {
+            thinkingBudget,
+          };
+        }
+        return { url, init: { method: 'POST', headers, body: JSON.stringify(body), signal } };
+      }
+      if (preset === 'openai') {
+        headers.Authorization = `Bearer ${apiKey}`;
+        const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+        const body = {
+          model,
+          temperature,
+          messages: [
+            { role: 'system', content: state.prompts.system },
+            { role: 'user', content: prompt },
+          ],
+        };
+        if (Number.isFinite(maxTokens) && maxTokens > 0) {
+          body.max_tokens = maxTokens;
+        }
+        return { url, init: { method: 'POST', headers, body: JSON.stringify(body), signal } };
+      }
+      // custom
+      const url = baseUrl;
+      const finalHeaders = { ...headers, ...parseHeadersJson(customHeaders) };
+      if (!finalHeaders.Authorization && apiKey) {
+        finalHeaders.Authorization = apiKey;
+      }
+      const context = {
+        prompt,
+        profile: state.profile,
+        notes: state.notesFiltered,
+      };
+      const bodyTemplate = renderTemplate(customBody, {
+        prompt,
+        profile_json: JSON.stringify(state.profile),
+        notes_json: JSON.stringify(state.notesFiltered),
+      });
+      return {
+        url,
+        init: {
+          method: customMethod,
+          headers: finalHeaders,
+          body: bodyTemplate,
+          signal,
+        },
+      };
+    }
+
+    function extractSummaryFromResponse(json) {
+      if (state.llm.preset === 'gemini') {
+        const candidate = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!candidate) throw new Error('Geminiレスポンスからテキストを取得できませんでした。');
+        return candidate;
+      }
+      if (state.llm.preset === 'openai') {
+        const text = json?.choices?.[0]?.message?.content;
+        if (!text) throw new Error('OpenAIレスポンスからテキストを取得できませんでした。');
+        return text;
+      }
+      const path = state.llm.customResponsePath;
+      const extracted = getResponseByPath(json, path);
+      if (typeof extracted !== 'string') {
+        throw new Error(`レスポンスパス「${path}」から文字列を取得できませんでした。`);
+      }
+      return extracted;
+    }
+
+    function cancelGeneration() {
+      if (state.generation.abortController) {
+        state.generation.abortController.abort();
+      }
+    }
+
+    function initEventListeners() {
+      elements.sourceRadios.forEach((radio) => {
+        radio.addEventListener('change', (event) => {
+          if (event.target.checked) {
+            applySourceMode(event.target.value);
+          }
+        });
+      });
+
+      elements.instanceUrl.addEventListener('input', (event) => {
+        state.instanceUrl = event.target.value;
+        saveState();
+      });
+
+      elements.miauthToken.addEventListener('input', () => {
+        state.miauth.manualToken = elements.miauthToken.value;
+      });
+
+      elements.applyToken.addEventListener('click', (event) => {
+        event.preventDefault();
+        applyManualToken();
+      });
+
+      elements.fetchNotesButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        fetchAndApplyNotes({ refreshProfile: false, sourceLabel: '手動取得' });
+      });
+
+      elements.fetchTarget.addEventListener('input', (event) => {
+        const value = Number(event.target.value) || state.fetchTarget;
+        state.fetchTarget = Math.min(Math.max(value, 10), 2000);
+        elements.fetchTarget.value = state.fetchTarget;
+        saveState();
+      });
+
+      elements.skipDuplicates.addEventListener('change', () => {
+        state.cache.skipDuplicates = elements.skipDuplicates.checked;
+        updateCacheStatus();
+        saveState();
+      });
+
+      elements.appendCache.addEventListener('change', () => {
+        state.cache.append = elements.appendCache.checked;
+        updateCacheStatus();
+        saveState();
+      });
+
+      elements.clearCache.addEventListener('click', (event) => {
+        event.preventDefault();
+        state.notesCache = [];
+        state.notesRaw = [];
+        state.notesFiltered = [];
+        filterNotes();
+        updateCacheStatus('キャッシュをクリア', 0);
+        updateNoteStats();
+        elements.outputTextarea.value = '';
+        elements.copyOutput.disabled = true;
+        elements.downloadOutput.disabled = true;
+        setStatus('キャッシュをクリアしました', '', 'info');
+      });
+
+      elements.exportCache.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (state.notesCache.length === 0) {
+          setStatus('エクスポートできません', 'キャッシュにノートがありません。', 'warning');
+          return;
+        }
+        const payload = {
+          exportedAt: new Date().toISOString(),
+          totalNotes: state.notesCache.length,
+          filters: {
+            visibilities: state.visibilities,
+            includeKeywords: state.includeKeywords,
+            excludeKeywords: state.excludeKeywords,
+            dateStart: state.dateStart,
+            dateEnd: state.dateEnd,
+          },
+          notes: state.notesCache,
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `misskey-notes-cache-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatus('キャッシュをエクスポートしました', `${state.notesCache.length}件のノートを含みます。`, 'success');
+      });
+
+      elements.dedupeCache.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (state.notesCache.length === 0) {
+          setStatus('重複整理は不要です', 'キャッシュにノートがありません。', 'info');
+          return;
+        }
+        const before = state.notesCache.length;
+        const map = new Map();
+        state.notesCache.forEach((note) => {
+          if (!map.has(note.id)) {
+            map.set(note.id, note);
+          }
+        });
+        state.notesCache = Array.from(map.values()).sort((a, b) => {
+          const dateA = a.createdAt ? Date.parse(a.createdAt) : 0;
+          const dateB = b.createdAt ? Date.parse(b.createdAt) : 0;
+          return dateB - dateA;
+        });
+        const removed = before - state.notesCache.length;
+        filterNotes();
+        updateCacheStatus('重複整理', removed > 0 ? -removed : 0);
+        updateNoteStats();
+        setStatus('キャッシュの重複を整理しました', `削除件数: ${removed}`, removed > 0 ? 'success' : 'info');
+      });
+
+      elements.noteLimit.addEventListener('input', (event) => {
+        const value = Number(event.target.value) || state.noteLimit;
+        state.noteLimit = Math.min(Math.max(value, 1), 5000);
+        filterNotes();
+        saveState();
+      });
+
+      [
+        { el: elements.visibilityPublic, key: 'public' },
+        { el: elements.visibilityHome, key: 'home' },
+        { el: elements.visibilityFollowers, key: 'followers' },
+      ].forEach(({ el, key }) => {
+        el.addEventListener('change', (event) => {
+          state.visibilities[key] = event.target.checked;
+          filterNotes();
+          saveState();
+        });
+      });
+
+      [elements.includeKeywords, elements.excludeKeywords].forEach((el) => {
+        el.addEventListener('input', () => {
+          state.includeKeywords = parseKeywordInput(elements.includeKeywords.value);
+          state.excludeKeywords = parseKeywordInput(elements.excludeKeywords.value);
+          filterNotes();
+          saveState();
+        });
+      });
+
+      [elements.dateStart, elements.dateEnd].forEach((el) => {
+        el.addEventListener('change', () => {
+          state.dateStart = elements.dateStart.value || null;
+          state.dateEnd = elements.dateEnd.value || null;
+          filterNotes();
+          saveState();
+        });
+      });
+
+      [elements.profileName, elements.profileLocation, elements.profileBio].forEach((el) => {
+        el.addEventListener('input', () => {
+          state.profile.name = elements.profileName.value;
+          state.profile.location = elements.profileLocation.value;
+          state.profile.bio = elements.profileBio.value;
+          updateProfilePreview();
+          saveState();
+        });
+      });
+
+      elements.llmPreset.addEventListener('change', () => {
+        state.llm.preset = elements.llmPreset.value;
+        setLLMUiByPreset();
+        syncLlmInputs();
+      });
+
+      [elements.llmApiKey, elements.llmBaseUrl, elements.llmTemperature, elements.llmMaxTokens, elements.llmThinkingBudget].forEach((el) => {
+        el.addEventListener('input', () => {
+          syncLlmInputs();
+        });
+      });
+
+      elements.llmModel.addEventListener('input', () => {
+        syncLlmInputs();
+      });
+
+      elements.fetchGeminiModels.addEventListener('click', (event) => {
+        event.preventDefault();
+        fetchGeminiModelList();
+      });
+
+      [elements.customMethod, elements.customHeaders, elements.customBody, elements.customResponsePath].forEach((el) => {
+        el.addEventListener('input', () => {
+          state.llm.customMethod = elements.customMethod.value;
+          state.llm.customHeaders = elements.customHeaders.value;
+          state.llm.customBody = elements.customBody.value;
+          state.llm.customResponsePath = elements.customResponsePath.value;
+          saveState();
+        });
+      });
+
+      [elements.systemPrompt, elements.userTemplate].forEach((el) => {
+        el.addEventListener('input', () => {
+          state.prompts.system = elements.systemPrompt.value;
+          state.prompts.userTemplate = elements.userTemplate.value;
+          saveState();
+        });
+      });
+
+      elements.persistToggle.addEventListener('change', () => {
+        state.persist = elements.persistToggle.checked;
+        saveState();
+        if (!state.persist) {
+          setStatus('保存を無効化しました', 'localStorageのエントリを削除しました。', 'info');
+        } else {
+          setStatus('設定を保存します', 'localStorageにAPI設定と入力を保存します。', 'info');
+        }
+      });
+
+      elements.miauthStart.addEventListener('click', startMiAuthFlow);
+      elements.miauthCancel.addEventListener('click', () => {
+        state.miauth = { token: null, user: null, sessionId: null };
+        elements.miauthStatus.textContent = '未接続';
+        window.localStorage.removeItem(MIAUTH_PENDING_KEY);
+        window.localStorage.removeItem(MIAUTH_RESULT_KEY);
+        updateFetchControls();
+        setStatus('MiAuthセッションをリセットしました', '', 'info');
+      });
+
+      elements.jsonFile.addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        if (file) {
+          elements.jsonFileName.hidden = false;
+          elements.jsonFileName.textContent = file.name;
+          handleJsonFile(file);
+        }
+      });
+
+      elements.manualName.addEventListener('input', (event) => {
+        state.profile.name = event.target.value;
+        elements.profileName.value = state.profile.name;
+        updateProfilePreview();
+        saveState();
+      });
+      elements.manualLocation.addEventListener('input', (event) => {
+        state.profile.location = event.target.value;
+        elements.profileLocation.value = state.profile.location;
+        updateProfilePreview();
+        saveState();
+      });
+      elements.manualBio.addEventListener('input', (event) => {
+        state.profile.bio = event.target.value;
+        elements.profileBio.value = state.profile.bio;
+        updateProfilePreview();
+        saveState();
+      });
+
+      elements.loadDemo.addEventListener('click', () => {
+        setProfile(demoProfile);
+        applyNotes(demoNotes, 'デモデータ');
+        filterNotes();
+      });
+
+      elements.generateButton.addEventListener('click', generateSummary);
+      elements.cancelButton.addEventListener('click', cancelGeneration);
+      elements.copyOutput.addEventListener('click', async () => {
+        const text = elements.outputTextarea.value;
+        await navigator.clipboard.writeText(text);
+        setStatus('クリップボードにコピーしました', `${text.length}文字`, 'success');
+      });
+      elements.downloadOutput.addEventListener('click', () => {
+        const blob = new Blob([elements.outputTextarea.value], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `misskey-summary-${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+      elements.resetOutput.addEventListener('click', () => {
+        setOutput('');
+        setStatus('出力をクリアしました', '', 'info');
+      });
+      elements.clearHistory.addEventListener('click', () => {
+        state.history = [];
+        renderHistory();
+        setStatus('履歴をクリアしました', '', 'info');
+      });
+
+      window.addEventListener('message', (event) => {
+        if (event.data?.type === 'miauth-complete') {
+          const resultRaw = window.localStorage.getItem(MIAUTH_RESULT_KEY);
+          if (resultRaw) {
+            const result = JSON.parse(resultRaw);
+            state.instanceUrl = result.instanceUrl;
+            elements.instanceUrl.value = result.instanceUrl;
+            state.miauth.token = result.token;
+            state.miauth.user = result.user;
+            state.miauth.manualToken = result.token;
+            elements.miauthStatus.textContent = `${result.user?.name ?? 'ユーザー'} として接続`;
+            elements.miauthToken.value = result.token;
+            updateFetchControls();
+            fetchAndApplyNotes({ refreshProfile: false, sourceLabel: 'MiAuth(同期)' });
+          }
+        }
+      });
+
+      window.addEventListener('storage', (event) => {
+        if (event.key === MIAUTH_RESULT_KEY && event.newValue) {
+          const result = JSON.parse(event.newValue);
+          state.instanceUrl = result.instanceUrl;
+          elements.instanceUrl.value = result.instanceUrl;
+          state.miauth.token = result.token;
+          state.miauth.user = result.user;
+          state.miauth.manualToken = result.token;
+          elements.miauthStatus.textContent = `${result.user?.name ?? 'ユーザー'} として接続`;
+          elements.miauthToken.value = result.token;
+          updateFetchControls();
+          fetchAndApplyNotes({ refreshProfile: false, sourceLabel: 'MiAuth(同期)' });
+        }
+      });
+    }
+
+    function handleCallbackOnLoad() {
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('miauth_session') || params.get('session');
+      if (sessionId) {
+        completeMiAuth(sessionId).finally(() => {
+          params.delete('miauth_session');
+          params.delete('session');
+          const url = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`;
+          window.history.replaceState({}, '', url);
+        });
+      } else {
+        const resultRaw = window.localStorage.getItem(MIAUTH_RESULT_KEY);
+        if (resultRaw) {
+          const result = JSON.parse(resultRaw);
+          state.instanceUrl = result.instanceUrl;
+          elements.instanceUrl.value = state.instanceUrl;
+          state.miauth.token = result.token;
+          state.miauth.user = result.user;
+          state.miauth.manualToken = result.token;
+          elements.miauthStatus.textContent = `${result.user?.name ?? 'ユーザー'} として接続`;
+          elements.miauthToken.value = result.token;
+          updateFetchControls();
+          fetchAndApplyNotes({ refreshProfile: false, sourceLabel: 'MiAuth(前回セッション)' });
+        }
+      }
+    }
+
+    function bootstrap() {
+      restoreState();
+      updateSourcePanels();
+      elements.instanceUrl.value = state.instanceUrl;
+      elements.noteLimit.value = state.noteLimit;
+      elements.fetchTarget.value = state.fetchTarget;
+      elements.visibilityPublic.checked = state.visibilities.public;
+      elements.visibilityHome.checked = state.visibilities.home;
+      elements.visibilityFollowers.checked = state.visibilities.followers;
+      elements.miauthToken.value = state.miauth.manualToken || '';
+      elements.appendCache.checked = state.cache.append;
+      elements.skipDuplicates.checked = state.cache.skipDuplicates;
+      elements.includeKeywords.value = state.includeKeywords.join(' ');
+      elements.excludeKeywords.value = state.excludeKeywords.join(' ');
+      elements.dateStart.value = state.dateStart || '';
+      elements.dateEnd.value = state.dateEnd || '';
+      renderPromptTemplate();
+      elements.llmPreset.value = state.llm.preset;
+      elements.llmApiKey.value = state.llm.apiKey;
+      elements.llmBaseUrl.value = state.llm.baseUrl;
+      state.llm.model = sanitizeModelId(state.llm.model);
+      elements.llmModel.value = state.llm.model;
+      elements.llmTemperature.value = state.llm.temperature;
+      elements.llmMaxTokens.value = state.llm.maxTokens ?? '';
+      elements.llmThinkingBudget.value = state.llm.thinkingBudget ?? '';
+      renderGeminiModelOptions();
+      elements.customMethod.value = state.llm.customMethod;
+      elements.customHeaders.value = state.llm.customHeaders;
+      elements.customBody.value = state.llm.customBody;
+      elements.customResponsePath.value = state.llm.customResponsePath;
+      updatePersistToggle();
+      updateProfilePreview();
+      renderErrorLog();
+      renderHistory();
+      setLLMUiByPreset();
+      initEventListeners();
+      handleCallbackOnLoad();
+      filterNotes();
+      updateCacheStatus();
+      updateSummaryPreview(elements.outputTextarea.value || '');
+      updateFetchControls();
+      if (isFileOrigin()) {
+        elements.localServerHint.hidden = state.sourceMode !== 'miauth';
+      }
+      setStatus('準備完了', '必要な情報を入力して生成を実行してください。', 'info');
+      setStepBadge('待機中');
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
